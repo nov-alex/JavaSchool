@@ -1,4 +1,0 @@
-IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
-    rem 64-bit OS
-    set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
-)
