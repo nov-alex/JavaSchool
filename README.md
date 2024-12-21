@@ -13,9 +13,11 @@
 
 `target\classes\kafka\kafka-run.bat`
 
-3. Запустить проект
+3. Запустить проект:
 
-`java -Dfile.encoding=UTF-8 -jar target\Lecture2-1.0-SNAPSHOT-jar-with-dependencies.jar`
+### Задание 1
+
+`java.exe -Dfile.encoding=UTF-8 -cp target\kafka.jar sbp.school.kafka.Task1`
 
 Ожидаемый результат (разные типы операций должны записываться в разные партиции топика):
 
