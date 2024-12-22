@@ -1,3 +1,44 @@
+# Запуск задания
+
+## Собрать в Idea
+`mvn clean compile`
+
+## Собрать в консоли
+
+1. Собрать проект
+
+`mvn clean package`
+
+2. Запустить kafka (с созданием топика и тд.)
+
+`target\classes\kafka\kafka-run.bat`
+
+3. Запустить проект:
+
+### Задание 1
+
+`java.exe -Dfile.encoding=UTF-8 -cp target\kafka.jar sbp.school.kafka.Task1`
+
+Ожидаемый результат (разные типы операций должны записываться в разные партиции топика):
+
+`Partition:0     8694fa38-2392-4817-a521-9e97d71858f4    {"id":"e853b731-121f-4b94-8225-7181dc930cb0","transactionType":"TRANSACTION_DEBIT","sum":50.02,"date":[2024,12,21],"accountNumber":"60473889826055129326"}`
+
+`Partition:1     06ea98ea-b184-4a09-b027-914ec59096e7    {"id":"f019e159-b83b-4de4-aca2-4db5a17af031","transactionType":"TRANSACTION_CREDIT","sum":50.01,"date":[2024,12,21],"accountNumber":"67291868652825707247"}`
+
+`Partition:2     b1778739-bb4e-42fe-b1cc-f48e2093d8e3    {"id":"193d324b-06c5-4ec3-a723-38d1e3c56d38","transactionType":"TRANSACTION_CHARGEBACK","sum":50.03,"date":[2024,12,21],"accountNumber":"71832105528363374348"}`
+
+### Задание 2
+
+`java.exe -Dfile.encoding=UTF-8 -cp target\kafka.jar sbp.school.kafka.Task2`
+
+Ожидаемый результат (вычитывает сообщения и проверяет их на валидность):
+
+
+`2024-12-22 DEBUG Message skip due key|value=null: topic = quickstart-sber-demo, partition = 0, offset = 9, key = null, value = TransactionData[id=193d324b-06c5-4ec3-a723-38d1e3c56d38, transactionType=TRANSACTION_CHARGEBACK, sum=50.03, date=2024-12-21, accountNumber=71832105528363374348]`
+
+`2024-12-22 INFO commit success: topic = quickstart-sber-demo, partition = 0, offset = 10`
+
+
 # Задание на практическую работу по модулю Kafka
 
 ### Задание #1 (Производители Kafka)

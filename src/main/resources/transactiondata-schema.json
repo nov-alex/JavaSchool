@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Transaction Data",
+  "description": "Transaction fo accounting operation",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The unique identifier for a transaction",
+      "type": "string"
+    },
+    "transactionType": {
+      "description": "Type of transaction",
+      "type": "string",
+      "enum": ["TRANSACTION_DEBIT", "TRANSACTION_CREDIT", "TRANSACTION_CHARGEBACK"]
+    },
+    "sum": {
+      "description": "Sum of transaction",
+      "type": "number",
+      "multipleOf": 0.01
+    },
+    "date": {
+      "description": "Date of transaction",
+      "type": "array",
+      "format": "date"
+    },
+    "accountNumber": {
+      "description": "Account of transaction",
+      "type": "string",
+      "pattern": "^\\d{20}$"
+    }
+  },
+  "required": ["id", "transactionType", "sum", "date", "accountNumber"]
+}
