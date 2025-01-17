@@ -2,8 +2,11 @@ package sbp.school.kafka.service;
 
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sbp.school.kafka.entity.TransactionData;
 import sbp.school.kafka.storage.ExternalStorage;
 
 import java.time.Duration;
@@ -24,17 +27,19 @@ public class ConsumerService {
     private final String topicRegExp;
     private final ExternalStorage storage;
     private final Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+    private boolean isRunning;
 
     public ConsumerService(String topic, String topicRegExp, ExternalStorage storage) {
         this.topic = topic;
         this.topicRegExp = topicRegExp;
         this.storage = storage;
         this.currentOffsets = new ConcurrentHashMap<>();
+        this.isRunning = true;
     }
 
     public void read(Properties properties) {
 
-        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties)) {
+        try (KafkaConsumer<String, TransactionData> consumer = new KafkaConsumer<>(properties)) {
             consumer.subscribe(Pattern.compile(topicRegExp), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -53,30 +58,43 @@ public class ConsumerService {
                 }
             });
 
-            while (true) {
-                ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofMillis(100L));
-                if (consumerRecords.isEmpty()) {
-                    continue;
-                }
-                for (ConsumerRecord<String, String> consumerRecord : consumerRecords) {
-                    if (consumerRecord.key() == null || consumerRecord.value() == null) {
-                        logger.debug("Message skip due key|value=null: topic = {}, partition = {}, offset = {}, key = {}, value = {}\n",
-                                consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                                consumerRecord.key(), consumerRecord.value());
-                    } else {
-                        logger.debug("topic = {}, partition = {}, offset = {}, key = {}, value = {}\n",
-                                consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                                consumerRecord.key(), consumerRecord.value());
-                        storage.storeOffset(consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset());
-                    }
+            ConsumerRecords<String, TransactionData> consumerRecords;
 
-                    currentOffsets.put(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
-                            new OffsetAndMetadata(consumerRecord.offset() + 1, "no metadata"));
+            while (isRunning) {
+                try {
+                    consumerRecords = consumer.poll(Duration.ofMillis(100L));
+                    if (consumerRecords.isEmpty()) {
+                        continue;
+                    }
+                    for (ConsumerRecord<String, TransactionData> consumerRecord : consumerRecords) {
+                        if (consumerRecord.key() == null || consumerRecord.value() == null) {
+                            logger.debug("Message skip due key|value=null: topic = {}, partition = {}, offset = {}, key = {}, value = {}\n",
+                                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                                    consumerRecord.key(), consumerRecord.value());
+                        } else {
+                            logger.debug("topic = {}, partition = {}, offset = {}, key = {}, value = {}\n",
+                                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                                    consumerRecord.key(), consumerRecord.value());
+                            storage.storeOffset(consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset());
+                        }
+
+                        currentOffsets.put(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
+                                new OffsetAndMetadata(consumerRecord.offset() + 1, "no metadata"));
+                    }
+                } catch (SerializationException e) {
+                    RecordDeserializationException recordDeserializationException = ((RecordDeserializationException) e);
+                    logger.error("Consumer Deserialization Exception: {}, topic = {}, partition = {}, offset = {}",
+                            e.getMessage(),
+                            recordDeserializationException.topicPartition().topic(),
+                            recordDeserializationException.topicPartition().partition(),
+                            recordDeserializationException.offset());
+                    currentOffsets.put(recordDeserializationException.topicPartition(),
+                            new OffsetAndMetadata(recordDeserializationException.offset() + 1, "no metadata"));
                 }
                 consumer.commitAsync(currentOffsets,
                         (offsets, exception) -> {
                             for (Map.Entry<TopicPartition, OffsetAndMetadata> offset : offsets.entrySet()) {
-                                logger.info("{}: topic = {}, partition = {}, offset = {}",
+                                logger.trace("{}: topic = {}, partition = {}, offset = {}",
                                         exception == null ? "commit success" : "commit failed",
                                         offset.getKey().topic(),
                                         offset.getKey().partition(),
@@ -95,5 +113,9 @@ public class ConsumerService {
                         });
             }
         }
+    }
+
+    public void stop() {
+        isRunning = false;
     }
 }

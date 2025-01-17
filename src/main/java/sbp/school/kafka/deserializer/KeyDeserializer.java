@@ -3,6 +3,7 @@ package sbp.school.kafka.deserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sbp.school.kafka.exception.ApplicationKeyDeserializerException;
 
 import java.nio.charset.StandardCharsets;
 
@@ -24,7 +25,7 @@ public class KeyDeserializer implements Deserializer<String> {
     public String deserialize(String topic, byte[] data) {
         if (data == null) {
             logger.error("Ключ не может быть null");
-            return null;
+            throw new ApplicationKeyDeserializerException("Ключ не может быть null");
         }
         return new String(data, StandardCharsets.UTF_8);
     }
