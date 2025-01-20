@@ -1,0 +1,6 @@
+rem Which java to use
+IF ["%JAVA_HOME%"] EQU [""] (
+	set JAVA=java.exe
+) ELSE (
+	set JAVA="%JAVA_HOME%/bin/java.exe"
+)
