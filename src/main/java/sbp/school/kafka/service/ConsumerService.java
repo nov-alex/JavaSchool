@@ -25,8 +25,8 @@ public class ConsumerService {
 
     private final String topic;
     private final String topicRegExp;
-    private final ExternalStorage storage;
     private final Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+    private ExternalStorage storage;
     private boolean isRunning;
 
     public ConsumerService(String topic, String topicRegExp, ExternalStorage storage) {
@@ -40,23 +40,8 @@ public class ConsumerService {
     public void read(Properties properties) {
 
         try (KafkaConsumer<String, TransactionData> consumer = new KafkaConsumer<>(properties)) {
-            consumer.subscribe(Pattern.compile(topicRegExp), new ConsumerRebalanceListener() {
-                @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    logger.debug("onPartitionsRevoked: {}", partitions.size());
-                    for (TopicPartition partition : partitions) {
-                        storage.commitOffset(partition.topic(), partition.partition());
-                    }
-                }
 
-                @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    logger.debug("onPartitionsAssigned: {}", partitions.size());
-                    for (TopicPartition partition : partitions) {
-                        consumer.seek(partition, storage.getCommitedOffset(partition.topic(), partition.partition()));// 2
-                    }
-                }
-            });
+            subscribe(consumer);
 
             ConsumerRecords<String, TransactionData> consumerRecords;
 
@@ -91,31 +76,52 @@ public class ConsumerService {
                     currentOffsets.put(recordDeserializationException.topicPartition(),
                             new OffsetAndMetadata(recordDeserializationException.offset() + 1, "no metadata"));
                 }
-                consumer.commitAsync(currentOffsets,
-                        (offsets, exception) -> {
-                            for (Map.Entry<TopicPartition, OffsetAndMetadata> offset : offsets.entrySet()) {
-                                logger.trace("{}: topic = {}, partition = {}, offset = {}",
-                                        exception == null ? "commit success" : "commit failed",
-                                        offset.getKey().topic(),
-                                        offset.getKey().partition(),
-                                        offset.getValue().offset());
-
-                                if (exception == null) {
-                                    storage.storeOffset(offset.getKey().topic(),
-                                            offset.getKey().partition(),
-                                            offset.getValue().offset());
-                                } else {
-                                    storage.commitOffset(offset.getKey().topic(),
-                                            offset.getKey().partition(),
-                                            offset.getValue().offset());
-                                }
-                            }
-                        });
+                consumer.commitAsync(currentOffsets, callback);
             }
         }
     }
 
     public void stop() {
         isRunning = false;
+    }
+
+    private final OffsetCommitCallback callback = (offsets, exception) -> {
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> offset : offsets.entrySet()) {
+            logger.trace("{}: topic = {}, partition = {}, offset = {}",
+                    exception == null ? "commit success" : "commit failed",
+                    offset.getKey().topic(),
+                    offset.getKey().partition(),
+                    offset.getValue().offset());
+
+            if (exception == null) {
+                storage.storeOffset(offset.getKey().topic(),
+                        offset.getKey().partition(),
+                        offset.getValue().offset());
+            } else {
+                storage.commitOffset(offset.getKey().topic(),
+                        offset.getKey().partition(),
+                        offset.getValue().offset());
+            }
+        }
+    };
+
+    private void subscribe(KafkaConsumer<String, TransactionData> consumer) {
+        consumer.subscribe(Pattern.compile(topicRegExp), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                logger.debug("onPartitionsRevoked: {}", partitions.size());
+                for (TopicPartition partition : partitions) {
+                    storage.commitOffset(partition.topic(), partition.partition());
+                }
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                logger.debug("onPartitionsAssigned: {}", partitions.size());
+                for (TopicPartition partition : partitions) {
+                    consumer.seek(partition, storage.getCommitedOffset(partition.topic(), partition.partition()));// 2
+                }
+            }
+        });
     }
 }
