@@ -12,5 +12,6 @@
     </root>
 
     <logger name="sbp.school.kafka.service.ProducerService" level="INFO"/>
+    <logger name="sbp.school.kafka.service.ConsumerService" level="TRACE"/>
 
 </configuration>
