@@ -8,9 +8,12 @@ import sbp.school.kafka.storage.dto.TopicDataStorage;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ExternalStorage {
+/**
+ * Хранилище для обеспечения работоспоспобности Кафки
+ */
+public class ClusterStorage {
 
-    private final Logger logger = LoggerFactory.getLogger(ExternalStorage.class);
+    private final Logger logger = LoggerFactory.getLogger(ClusterStorage.class);
 
     private final Map<String, TopicDataStorage> storage = new ConcurrentHashMap<>();
 
