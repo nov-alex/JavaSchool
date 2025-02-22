@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ack Data",
+  "description": "AckData for ack operation",
+  "type": "object",
+  "properties": {
+    "start_date": {
+      "description": "Start Date for ack",
+      "type": "array",
+      "format": "date"
+    },
+    "end_date": {
+      "description": "End Date for ack",
+      "type": "array",
+      "format": "date"
+    },
+    "hash": {
+      "description": "Hash data of transaction",
+      "type": "array"
+    }
+  },
+  "required": ["start_date", "end_date", "hash"]
+}

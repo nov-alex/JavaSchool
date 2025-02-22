@@ -4,54 +4,53 @@ import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sbp.school.kafka.entity.TransactionData;
-import sbp.school.kafka.storage.ExternalStorage;
+import sbp.school.kafka.storage.ClusterStorage;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
+ * Базовый сервис-потребитель для передачи данных
  *
+ * @param <T> принимаемый тип данных
  */
-public class ConsumerService {
+public class BaseConsumer<T> implements Runnable {
 
-    private static final Logger logger = LoggerFactory.getLogger(ConsumerService.class);
+    private static final Logger logger = LoggerFactory.getLogger(BaseConsumer.class);
 
-    private final String topic;
     private final String topicRegExp;
     private final Map<TopicPartition, OffsetAndMetadata> currentOffsets;
-    private ExternalStorage storage;
-    private boolean isRunning;
+    private ClusterStorage storage;
+    private final Consumer<String, T> consumer;
+    private final java.util.function.Consumer<T> dataConsumer;
 
-    public ConsumerService(String topic, String topicRegExp, ExternalStorage storage) {
-        this.topic = topic;
+    public BaseConsumer(String topicRegExp, ClusterStorage storage, Consumer<String, T> consumer, java.util.function.Consumer<T> dataConsumer) {
         this.topicRegExp = topicRegExp;
         this.storage = storage;
+        this.consumer = consumer;
         this.currentOffsets = new ConcurrentHashMap<>();
-        this.isRunning = true;
+        this.dataConsumer = dataConsumer;
     }
 
-    public void read(Properties properties) {
+    public void read() {
 
-        try (KafkaConsumer<String, TransactionData> consumer = new KafkaConsumer<>(properties)) {
+        try {
 
-            subscribe(consumer);
+            ConsumerRecords<String, T> consumerRecords;
 
-            ConsumerRecords<String, TransactionData> consumerRecords;
-
-            while (isRunning) {
+            while (true) {
                 try {
                     consumerRecords = consumer.poll(Duration.ofMillis(100L));
                     if (consumerRecords.isEmpty()) {
                         continue;
                     }
-                    for (ConsumerRecord<String, TransactionData> consumerRecord : consumerRecords) {
+                    for (ConsumerRecord<String, T> consumerRecord : consumerRecords) {
                         if (consumerRecord.key() == null || consumerRecord.value() == null) {
                             logger.debug("Message skip due key|value=null: topic = {}, partition = {}, offset = {}, key = {}, value = {}\n",
                                     consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
@@ -61,6 +60,10 @@ public class ConsumerService {
                                     consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
                                     consumerRecord.key(), consumerRecord.value());
                             storage.storeOffset(consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset());
+                        }
+
+                        if (dataConsumer != null) {
+                            dataConsumer.accept(consumerRecord.value());
                         }
 
                         currentOffsets.put(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()),
@@ -78,11 +81,15 @@ public class ConsumerService {
                 }
                 consumer.commitAsync(currentOffsets, callback);
             }
+        } catch (WakeupException exception) {
+            logger.debug("Shutting down consumer...");
+        } finally {
+            consumer.close();
         }
     }
 
     public void stop() {
-        isRunning = false;
+        consumer.wakeup();
     }
 
     private final OffsetCommitCallback callback = (offsets, exception) -> {
@@ -105,7 +112,7 @@ public class ConsumerService {
         }
     };
 
-    private void subscribe(KafkaConsumer<String, TransactionData> consumer) {
+    private void subscribe(Consumer<String, T> consumer) {
         consumer.subscribe(Pattern.compile(topicRegExp), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -119,9 +126,15 @@ public class ConsumerService {
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                 logger.debug("onPartitionsAssigned: {}", partitions.size());
                 for (TopicPartition partition : partitions) {
-                    consumer.seek(partition, storage.getCommitedOffset(partition.topic(), partition.partition()));// 2
+                    consumer.seek(partition, storage.getCommitedOffset(partition.topic(), partition.partition()));
                 }
             }
         });
+    }
+
+    @Override
+    public void run() {
+        subscribe(consumer);
+        read();
     }
 }
