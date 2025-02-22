@@ -1,4 +1,4 @@
-package sbp.school.kafka.util;
+package sbp.school.kafka.partitioner;
 
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
@@ -28,8 +28,7 @@ public class TransactionDataPartitioner implements Partitioner {
      */
     @Override
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        if (valueBytes == null
-                || !(value instanceof TransactionData)) {
+        if (!(value instanceof TransactionData)) {
             logger.error("В качестве значения только TransactionData");
             throw new ApplicationProducerException("В качестве ключа должно быть только TransactionData");
         }
@@ -54,7 +53,6 @@ public class TransactionDataPartitioner implements Partitioner {
 
     /**
      * Configure this class with the given key-value pairs
-     *
      */
     @Override
     public void configure(Map<String, ?> configs) {
